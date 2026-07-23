@@ -1,0 +1,45 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build framework-dependent (light)
+        run: dotnet publish -c Release -r win-x64 --self-contained false -o out/light
+
+      - name: Build self-contained (portable)
+        run: dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out/portable
+
+      - name: Zip artifacts
+        run: |
+          Compress-Archive -Path out/light/* -DestinationPath NotepadGuard-light.zip
+          Compress-Archive -Path out/portable/* -DestinationPath NotepadGuard-portable.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            NotepadGuard-light.zip
+            NotepadGuard-portable.zip
+          body: |
+            ## Download
+
+            | File | Notes |
+            |------|-------|
+            | `NotepadGuard-portable.zip` | Self-contained — works on any Windows 10/11 x64, no dependencies |
+            | `NotepadGuard-light.zip` | Requires [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) installed |
