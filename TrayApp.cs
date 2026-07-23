@@ -11,6 +11,7 @@ public class TrayApp : ApplicationContext
     private readonly NotifyIcon _trayIcon;
     private readonly System.Timers.Timer _timer;
     private readonly BackupManager _backup;
+    private readonly Config _config;
     private int _totalSaves;
 
     private static string Version =>
@@ -19,27 +20,29 @@ public class TrayApp : ApplicationContext
     public TrayApp()
     {
         _backup = new BackupManager();
+        _config = Config.Load();
 
         _trayIcon = new NotifyIcon
         {
             Icon = MakeIcon(),
-            Text = $"NotepadGuard v{Version} — monitoring",
+            Text = $"NotepadGuard v{Version} — every {_config.IntervalSeconds}s",
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
 
-        _timer = new System.Timers.Timer(60_000);
+        _timer = new System.Timers.Timer(_config.IntervalSeconds * 1000);
         _timer.Elapsed += (_, _) => DoCapture();
         _timer.AutoReset = true;
         _timer.Start();
 
         DoCapture();
-        ShowBalloon($"NotepadGuard v{Version} active. Backup every 60 s.");
+        ShowBalloon($"NotepadGuard v{Version} — backup every {_config.IntervalSeconds}s");
     }
 
     private ContextMenuStrip BuildMenu()
     {
         var m = new ContextMenuStrip();
+
         m.Items.Add("Open backup folder", null, (_, _) =>
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
@@ -49,6 +52,22 @@ public class TrayApp : ApplicationContext
 
         m.Items.Add("Browse backups...", null, (_, _) =>
             new BackupViewerForm(_backup).Show());
+
+        m.Items.Add(new ToolStripSeparator());
+
+        // Interval submenu
+        var intervalMenu = new ToolStripMenuItem("Backup interval");
+        foreach (var secs in new[] { 30, 60, 120 })
+        {
+            var s = secs;
+            var item = new ToolStripMenuItem($"{s} seconds")
+            {
+                Checked = _config.IntervalSeconds == s
+            };
+            item.Click += (_, _) => SetInterval(s, intervalMenu);
+            intervalMenu.DropDownItems.Add(item);
+        }
+        m.Items.Add(intervalMenu);
 
         m.Items.Add(new ToolStripSeparator());
 
@@ -71,6 +90,19 @@ public class TrayApp : ApplicationContext
         return m;
     }
 
+    private void SetInterval(int seconds, ToolStripMenuItem menu)
+    {
+        _config.IntervalSeconds = seconds;
+        _config.Save();
+        _timer.Interval = seconds * 1000;
+        _trayIcon.Text = $"NotepadGuard v{Version} — every {seconds}s";
+
+        foreach (ToolStripMenuItem item in menu.DropDownItems)
+            item.Checked = item.Text == $"{seconds} seconds";
+
+        ShowBalloon($"Interval set to {seconds}s");
+    }
+
     private int DoCapture()
     {
         try
@@ -86,7 +118,7 @@ public class TrayApp : ApplicationContext
             if (saved > 0)
             {
                 _totalSaves += saved;
-                _trayIcon.Text = $"NotepadGuard — {_totalSaves} backup(s)";
+                _trayIcon.Text = $"NotepadGuard v{Version} — {_totalSaves} saved, every {_config.IntervalSeconds}s";
             }
             return saved;
         }
@@ -123,8 +155,7 @@ public class TrayApp : ApplicationContext
         g.DrawLine(checkPen, 24, 27, 29, 20);
 
         var handle = bmp.GetHicon();
-        var icon = Icon.FromHandle(handle);
-        return icon;
+        return Icon.FromHandle(handle);
     }
 
     protected override void Dispose(bool disposing)
