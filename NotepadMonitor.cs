@@ -31,9 +31,10 @@ public static class NotepadMonitor
                         DateTime.Now));
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Window may have closed between enumeration and access
+                Logger.Log($"could not read notepad pid {proc.Id}: {ex.GetType().Name}: {ex.Message}");
             }
             finally
             {

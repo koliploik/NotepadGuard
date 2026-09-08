@@ -9,9 +9,9 @@
     <RootNamespace>NotepadGuard</RootNamespace>
     <ApplicationIcon>notepadguard.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
-    <Version>1.3.0</Version>
-    <AssemblyVersion>1.3.0</AssemblyVersion>
-    <FileVersion>1.3.0</FileVersion>
+    <Version>1.4.0</Version>
+    <AssemblyVersion>1.4.0</AssemblyVersion>
+    <FileVersion>1.4.0</FileVersion>
     <Description>Auto-backup for Windows Notepad sessions</Description>
   </PropertyGroup>
 </Project>

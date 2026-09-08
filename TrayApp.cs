@@ -13,6 +13,7 @@ public class TrayApp : ApplicationContext
     private readonly BackupManager _backup;
     private readonly Config _config;
     private int _totalSaves;
+    private int _cycles;
 
     private static string Version =>
         Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
@@ -77,10 +78,17 @@ public class TrayApp : ApplicationContext
             ShowBalloon(n > 0 ? $"Saved {n} backup(s)." : "No changes detected.");
         });
 
+        m.Items.Add("View diagnostic log", null, (_, _) =>
+        {
+            Logger.Log("--- log opened by user ---");
+            Logger.OpenInNotepad();
+        });
+
         m.Items.Add(new ToolStripSeparator());
 
         m.Items.Add("Exit", null, (_, _) =>
         {
+            Logger.Log("SHUTDOWN: Exit clicked by user");
             DoCapture();
             _timer.Stop();
             _trayIcon.Visible = false;
@@ -95,6 +103,7 @@ public class TrayApp : ApplicationContext
         _config.IntervalSeconds = seconds;
         _config.Save();
         _timer.Interval = seconds * 1000;
+        Logger.Log($"interval changed to {seconds}s");
         _trayIcon.Text = $"NotepadGuard v{Version} — every {seconds}s";
 
         foreach (ToolStripMenuItem item in menu.DropDownItems)
@@ -108,21 +117,36 @@ public class TrayApp : ApplicationContext
         try
         {
             int saved = 0;
-            foreach (var snap in NotepadMonitor.CaptureAll())
+            var snapshots = NotepadMonitor.CaptureAll();
+
+            foreach (var snap in snapshots)
             {
                 if (string.IsNullOrEmpty(snap.Content)) continue;
                 var label = string.IsNullOrWhiteSpace(snap.WindowTitle) ? "Untitled" : snap.WindowTitle;
                 if (_backup.SaveIfChanged(label, snap.Content))
+                {
                     saved++;
+                    Logger.Log($"saved backup: \"{label}\" ({snap.Content.Length} chars)");
+                }
             }
+
             if (saved > 0)
             {
                 _totalSaves += saved;
                 _trayIcon.Text = $"NotepadGuard v{Version} — {_totalSaves} saved, every {_config.IntervalSeconds}s";
             }
+
+            // Heartbeat: the last line of the log tells us exactly when the app was last alive.
+            _cycles++;
+            Logger.Log($"cycle #{_cycles}: {snapshots.Count} notepad(s), {saved} saved, {GC.GetTotalMemory(false) / 1024 / 1024} MB");
+
             return saved;
         }
-        catch { return 0; }
+        catch (Exception ex)
+        {
+            Logger.LogException("DoCapture", ex);
+            return 0;
+        }
     }
 
     private void ShowBalloon(string msg)
